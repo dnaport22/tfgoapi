@@ -1,0 +1,7 @@
+{
+  "model_file": "objectDetectionModel.pb",
+  "model_name": "frozen_inference_graph.pb",
+  "label_file": "objectDetectionLabel.pbtxt",
+  "label_name": "mscoco_label_map.pbtxt",
+  "description": "COCO Model"
+}

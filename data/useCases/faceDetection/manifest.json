@@ -1,0 +1,7 @@
+{
+  "model_file": "faceDetectionModel.pb",
+  "model_name": "frozen_inference_graph_face.pb",
+  "label_file": "faceDetectionLabel.pbtxt",
+  "label_name": "face_label_map.pbtxt",
+  "description": "SSD Mobile Net"
+}
