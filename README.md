@@ -1,10 +1,10 @@
-#TFGraphApi
+# TFGraphApi
 TensorFlow Graph Api to execute tensflow based pre-trained models. This project already has 2 models, i.e. Face Detection and Object Detection.
 
 This project is a part of Deep Fashion Project and is intended to work along with all other smart micro-services under the project.
 
-#How to run
-##Prerequisites
+# How to run
+## Prerequisites
  - [Tensorflow](https://www.tensorflow.org/install/install_c)
  - [Golang](https://golang.org/)
 
