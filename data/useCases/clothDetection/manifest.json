@@ -1,0 +1,7 @@
+{
+  "model_file": "clothDetectionModel.pb",
+  "model_name": "azure_custom_vision.pb",
+  "label_file": "clothDetectionLabel.pbtxt",
+  "label_name": "azure_custom_vision.pbtxt",
+  "description": "Azure Custom Vision"
+}
