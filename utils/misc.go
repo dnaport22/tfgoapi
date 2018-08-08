@@ -33,7 +33,7 @@ func GenerateUseCasePath(uc string, data string) (string, string) {
 		ext = ".pbtxt"
 	}
 	fileTemp := fmt.Sprintf("%s/%s/%s%s%s",
-		baseLoc, uc, uc, strings.ToTitle(data), ext)
+		baseLoc, uc, uc, strings.Title(data), ext)
 
 	return baseLoc, fileTemp
 }

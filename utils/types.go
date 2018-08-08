@@ -13,6 +13,7 @@ type DetectedObject struct {
 	Age int `json:"Age,omitempty"`
 	Gender string `json:"Gender,omitempty"`
 	FaceBox *BBox `json:"FaceBoundingBox,omitempty"`
+	Clothing *AzureClothing `json:"Clothing,omitempty"`
 }
 
 type DetectionGraph struct {
@@ -53,4 +54,9 @@ type BBox struct {
 	MinY int `json:"y1,omitempty"`
 	MaxX int `json:"x2,omitempty"`
 	MaxY int `json:"y2,omitempty"`
+}
+
+type AzureClothing struct {
+	Indian int `json:"Indian"`
+	Western int `json:"Western"`
 }

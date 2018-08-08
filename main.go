@@ -14,16 +14,19 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 				"flag"
+	"image/jpeg"
 	"github.com/disintegration/imaging"
-		"image/jpeg"
-		azure "tfGraphApi/thirdparty/azurevision"
-)
-
+		azure "tfGraphApi/third-party/azurevision"
+	)
 
 var im u.Img
 var model u.Model
 var labels u.Labels
 var detectionGraph u.DetectionGraph
+
+var azureTfModel u.Model
+var azureTfLabels u.Labels
+var azureGraph u.DetectionGraph
 
 func loadGraph() {
 	graph := detectionGraph.Graph
@@ -35,20 +38,28 @@ func loadGraph() {
 	log.Print(fmt.Sprintf("Loaded graph\n\tName: %s\n\tDescription: %s", model.Name, model.Description))
 }
 
-
 func GetPeople(w http.ResponseWriter, r *http.Request) {
 	// reading image data into byte slices
 	contents, _ := ioutil.ReadAll(r.Body)
 	// Augmenting contents
 	r.Body = ioutil.NopCloser(bytes.NewReader(contents))
 	defer r.Body.Close()
-
+	// Empty byte buffer
+	data := new(bytes.Buffer)
 	// Decoding byte slice into image.Image
 	img, _, _ := image.Decode(r.Body)
+	// Resizing image to lower feature size
+	img = imaging.Resize(img, 227, 227, imaging.Lanczos)
 
-	im.ImageBytes = contents
+	// Encoding image into jpeg and loading it on empty byte buffer
+	jpeg.Encode(data, img, nil)
+	// Setting image bytes for processing
+	im.ImageBytes = data.Bytes()
+	// Setting image object for processing
 	im.ImgObject = img
+	// Initialising image tensor
 	im.SetImgTensor()
+
 	detection := runTfSession()
 
 	w.WriteHeader(http.StatusOK)
@@ -58,24 +69,38 @@ func GetPeople(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func runAzureModel() (int, int){
 
-func runTfSession() []u.DetectedObject {
-	session := detectionGraph.Session
-	imageInput := detectionGraph.ImageOperation
-	detectionScore := detectionGraph.DetectionScore
-	detectionClasses := detectionGraph.DetectionClasses
-	boundingBoxes := detectionGraph.BoundingBoxes
-	numDetection := detectionGraph.NumDetections
+	input := azureGraph.Graph.Operation("Placeholder")
+	out := azureGraph.Graph.Operation("loss")
 
-	output, err := session.Run(
+	output, err := azureGraph.Session.Run(
 		map[tf.Output]*tf.Tensor{
-			imageInput.Output(0): im.ImgTensor,
+			input.Output(0): im.NormalisedImgTensor()[0],
 		},
 		[]tf.Output{
-			detectionScore.Output(0),
-			detectionClasses.Output(0),
-			boundingBoxes.Output(0),
-			numDetection.Output(0),
+			out.Output(0),
+		},
+		nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	probabilities := output[0].Value().([][]float32)[0]
+
+	return int(probabilities[0]*100), int(probabilities[1]*100)
+}
+
+func runTfSession() []u.DetectedObject {
+	// Run tensorflow session
+	output, err := detectionGraph.Session.Run(
+		map[tf.Output]*tf.Tensor{
+			detectionGraph.ImageOperation.Output(0): im.ImgTensor,
+		},
+		[]tf.Output{
+			detectionGraph.DetectionScore.Output(0),
+			detectionGraph.DetectionClasses.Output(0),
+			detectionGraph.BoundingBoxes.Output(0),
+			detectionGraph.NumDetections.Output(0),
 		},
 		nil)
 	if err != nil {
@@ -87,28 +112,33 @@ func runTfSession() []u.DetectedObject {
 	classes := output[1].Value().([][]float32)[0]
 	boxes := output[2].Value().([][][]float32)[0]
 
-	curObj := 0
-	i := im.ImgObject
 	// Transform the decoded YCbCr JPG image into RGBA
-	b := i.Bounds()
+	b := im.ImgObject.Bounds()
 	img := image.NewRGBA(b)
-	vision, _ := azure.New("<KEY>",
+
+	// Initialising Azure Api
+	vision, _ := azure.New("7b11a4bfca114ca2949c1d0f659e3aed",
 		"https://uksouth.api.cognitive.microsoft.com/vision/v1.0")
 
 	var detectedObject []u.DetectedObject
 
+	curObj := 0
 	for probabilities[curObj] > 0.4 {
 		x1 := float32(img.Bounds().Max.X) * boxes[curObj][1]
 		x2 := float32(img.Bounds().Max.X) * boxes[curObj][3]
 		y1 := float32(img.Bounds().Max.Y) * boxes[curObj][0]
 		y2 := float32(img.Bounds().Max.Y) * boxes[curObj][2]
 
-		cropped := imaging.Crop(i, image.Rectangle{
+		// cropping image for azure vision api
+		cropped := imaging.Crop(im.ImgObject, image.Rectangle{
 			image.Point{int(x1), int(y1)},
 			image.Point{int(x2), int(y2)}})
 
+		// Empty buffer to store azure vision api results
 		azureData := new(bytes.Buffer)
+		// Encoding cropped image into jpeg
 		jpeg.Encode(azureData, cropped, nil)
+		// Calling azure vision api
 		azOut, _ := vision.AnalyzeImage(azureData.Bytes(), azure.VisualFeatures{Faces:true})
 
 		label, prob := labels.GetLabel(curObj, probabilities, classes)
@@ -117,11 +147,13 @@ func runTfSession() []u.DetectedObject {
 			face = azOut.Faces[0]
 		}
 		faceBox := face.FaceRectangle
+		indianClothes, westernClothes := runAzureModel()
 		detectedObject = append(detectedObject, u.DetectedObject{
 			ObjectId: curObj, Label: label, Probability: int(prob),
 			Age: face.Age, Gender: face.Gender,
 			ObjectBox: &u.BBox{MinX: int(x1), MinY: int(y1), MaxX: int(x2), MaxY: int(y2)},
 			FaceBox: &u.BBox{MinX: faceBox.Left, MinY: faceBox.Top, MaxX: faceBox.Width, MaxY: faceBox.Height},
+			Clothing: &u.AzureClothing{Indian: indianClothes, Western: westernClothes},
 		})
 		curObj++
 	}
@@ -129,18 +161,28 @@ func runTfSession() []u.DetectedObject {
 	return detectedObject
 }
 
-
 func runLocal(fnm string) {
 	// Reading local file into byte slices
 	b, _ := ioutil.ReadFile(fnm)
-	im.ImageBytes = b
+	// Empty byte buffer
+	data := new(bytes.Buffer)
+	// Decoding bytes into image object
 	img, _, _ := image.Decode(bytes.NewReader(b))
+	// Resizing image to lower feature size
+	img = imaging.Resize(img, 227, 227, imaging.Lanczos)
+	// Encoding image into jpeg and loading it on empty byte buffer
+	jpeg.Encode(data, img, nil)
+	// Setting image bytes for processing
+	im.ImageBytes = data.Bytes()
+	// Setting image object for processing
 	im.ImgObject = img
+	// Initialising image tensor
 	im.SetImgTensor()
+	// Executing detection job
 	detection := runTfSession()
-	fmt.Print(detection)
+	// Printing results
+	fmt.Print(detection, "\n")
 }
-
 
 func runApi(port string) {
 	//Initialising routes
@@ -149,14 +191,12 @@ func runApi(port string) {
 	log.Fatal(http.ListenAndServe(port, router))
 }
 
-
 func main() {
 	mode := flag.Int("m", 0, "Run time mode: 0 => local, 1 => api")
 	useCase := flag.String("u", "", "Use case to run")
 	imgFile := flag.String("img", "", "Path of a JPG image to use for input")
-	//useAzureVision := flag.Bool("az", true, "Use Azure Vision: false => no, true => yes")
+	azureVision := flag.String("az", "", "Use Azure Vision Model")
 	flag.Parse()
-
 	modelToRun := *useCase
 	availableUseCases := u.AvailableUseCases()
 
@@ -168,6 +208,25 @@ func main() {
 
 	model.Load(modelToRun)
 	labels.Load(modelToRun)
+
+	if len(*azureVision) > 0 {
+		azureTfModel.Load(*azureVision)
+		azureTfLabels.Load(*azureVision)
+
+		// Construct an in-memory graph from the serialized form.
+		azureGraph.Graph = tf.NewGraph()
+		if err := azureGraph.Graph.Import(azureTfModel.Model, ""); err != nil {
+			log.Fatal(err)
+		}
+
+		// Create a session for inference over graph.
+		session, err := tf.NewSession(azureGraph.Graph, nil)
+		azureGraph.Session = session
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer session.Close()
+	}
 
 	// Construct an in-memory graph from the serialized form.
 	detectionGraph.Graph = tf.NewGraph()

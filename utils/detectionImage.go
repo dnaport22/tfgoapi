@@ -78,7 +78,7 @@ func ConstructGraphToNormaliseImage() (graph *tf.Graph, input, output tf.Output,
 	return graph, input, output, err
 }
 
-func (i *Img) SetImgTensor() {
+func (i *Img) NormalisedImgTensor()[]*tf.Tensor {
 	// DecodeJpeg uses a scalar String-valued tensor as input.
 	tensor, err := tf.NewTensor(string(i.ImageBytes))
 	if err != nil {
@@ -86,6 +86,33 @@ func (i *Img) SetImgTensor() {
 	}
 	// Creates a tensorflow graph to decode the png Img
 	graph, input, output, err := ConstructGraphToNormaliseImage()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Execute that graph to decode this one Img
+	session, err := tf.NewSession(graph, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer session.Close()
+	normalized, err := session.Run(
+		map[tf.Output]*tf.Tensor{input: tensor},
+		[]tf.Output{output},
+		nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return normalized
+}
+
+func (i *Img) SetImgTensor() {
+	// DecodeJpeg uses a scalar String-valued tensor as input.
+	tensor, err := tf.NewTensor(string(i.ImageBytes))
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Creates a tensorflow graph to decode the png Img
+	graph, input, output, err := decodeJpegGraph()
 	if err != nil {
 		log.Fatal(err)
 	}
