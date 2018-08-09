@@ -51,10 +51,10 @@ type Model struct {
 }
 
 type BBox struct {
-	MinX int `json:"x1,omitempty"`
-	MinY int `json:"y1,omitempty"`
-	MaxX int `json:"x2,omitempty"`
-	MaxY int `json:"y2,omitempty"`
+	MinX float32 `json:"x1,omitempty"`
+	MinY float32 `json:"y1,omitempty"`
+	MaxX float32 `json:"x2,omitempty"`
+	MaxY float32 `json:"y2,omitempty"`
 }
 
 type AzureClothing struct {

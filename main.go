@@ -146,13 +146,17 @@ func runTfSession() []u.DetectedObject {
 		if len(azOut.Faces) > 0 {
 			face = azOut.Faces[0]
 		}
+		// Making variable short to read
 		faceBox := face.FaceRectangle
+		// Running custom vision model loaded in-memory
 		indianClothes, westernClothes := runAzureModel()
 		detectedObject = append(detectedObject, u.DetectedObject{
 			ObjectId: curObj, Label: label, Probability: int(prob),
 			Age: face.Age, Gender: face.Gender,
-			ObjectBox: &u.BBox{MinX: int(x1), MinY: int(y1), MaxX: int(x2), MaxY: int(y2)},
-			FaceBox: &u.BBox{MinX: faceBox.Left, MinY: faceBox.Top, MaxX: faceBox.Width, MaxY: faceBox.Height},
+			ObjectBox: &u.BBox{MinX: x1, MinY: y1, MaxX: x2, MaxY: y2},
+			FaceBox: &u.BBox{MinX: float32(faceBox.Left), MinY: float32(faceBox.Top),
+			MaxX: float32(faceBox.Width),
+			MaxY: float32(faceBox.Height)},
 			Clothing: &u.AzureClothing{Indian: indianClothes, Western: westernClothes},
 			NumberOfPeopleDetected: u.GetObjectLen(probabilities),
 		})
