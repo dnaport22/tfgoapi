@@ -6,9 +6,9 @@ import (
 )
 
 type DetectedObject struct {
-	ObjectId int `json:"id,omitempty"`
-	Label string `json:"label,omitempty"`
-	Probability int `json:"probability,omitempty"`
+	ObjectId int `json:"Id,omitempty"`
+	Label string `json:"Label,omitempty"`
+	Probability int `json:"Probability,omitempty"`
 	ObjectBox *BBox `json:"ObjectBoundingBox,omitempty"`
 	Age int `json:"Age,omitempty"`
 	Gender string `json:"Gender,omitempty"`
