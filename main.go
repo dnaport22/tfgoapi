@@ -139,17 +139,38 @@ func runTfSession() []u.DetectedObject {
 		// Encoding cropped image into jpeg
 		jpeg.Encode(azureData, cropped, nil)
 		// Calling azure vision api
-		azOut, _ := vision.AnalyzeImage(azureData.Bytes(), azure.VisualFeatures{Faces:true})
+		azCloudVisionOut := make(chan azure.VisionResult)
+		azCustomVisionOut := make(chan []int)
 
-		label, prob := labels.GetLabel(curObj, probabilities, classes)
 		var face azure.Face
-		if len(azOut.Faces) > 0 {
-			face = azOut.Faces[0]
+		var indianClothes int
+		var westernClothes int
+
+		go func(data []byte) {
+			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true})
+			azCloudVisionOut <- out
+		}(azureData.Bytes())
+
+		go func() {
+			iC, wC := runAzureModel()
+			azCustomVisionOut <- []int{iC, wC}
+		}()
+
+		for i := 0; i < 2; i++ {
+			select {
+			case msg1 := <-azCloudVisionOut:
+				if len(msg1.Faces) > 0 {
+					face = msg1.Faces[0]
+				}
+			case msg2 := <-azCustomVisionOut:
+				westernClothes = msg2[1]
+				indianClothes = msg2[0]
+			}
 		}
 		// Making variable short to read
 		faceBox := face.FaceRectangle
-		// Running custom vision model loaded in-memory
-		indianClothes, westernClothes := runAzureModel()
+
+		label, prob := labels.GetLabel(curObj, probabilities, classes)
 		detectedObject = append(detectedObject, u.DetectedObject{
 			ObjectId: curObj, Label: label, Probability: int(prob),
 			Age: face.Age, Gender: face.Gender,
