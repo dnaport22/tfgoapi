@@ -14,6 +14,7 @@ type DetectedObject struct {
 	Gender string `json:"Gender,omitempty"`
 	FaceBox *BBox `json:"FaceBoundingBox,omitempty"`
 	Clothing *AzureClothing `json:"Clothing,omitempty"`
+	NumberOfPeopleDetected int `json:"NumberOfPeopleDetected,omitempty"`
 }
 
 type DetectionGraph struct {

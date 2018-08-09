@@ -38,6 +38,13 @@ func GenerateUseCasePath(uc string, data string) (string, string) {
 	return baseLoc, fileTemp
 }
 
+func GetObjectLen(object []float32)int {
+	curObj := 0
+	for object[curObj] > 0.4 {
+		curObj++
+	}
+	return curObj
+}
 
 // helper function to check if
 // elem x exists in the given []string

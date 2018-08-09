@@ -154,6 +154,7 @@ func runTfSession() []u.DetectedObject {
 			ObjectBox: &u.BBox{MinX: int(x1), MinY: int(y1), MaxX: int(x2), MaxY: int(y2)},
 			FaceBox: &u.BBox{MinX: faceBox.Left, MinY: faceBox.Top, MaxX: faceBox.Width, MaxY: faceBox.Height},
 			Clothing: &u.AzureClothing{Indian: indianClothes, Western: westernClothes},
+			NumberOfPeopleDetected: u.GetObjectLen(probabilities),
 		})
 		curObj++
 	}
