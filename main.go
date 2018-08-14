@@ -17,7 +17,8 @@ import (
 	"image/jpeg"
 	"github.com/disintegration/imaging"
 		azure "tfGraphApi/third-party/azurevision"
-	)
+	"path/filepath"
+)
 
 var im u.Img
 var model u.Model
@@ -187,27 +188,34 @@ func runTfSession() []u.DetectedObject {
 	return detectedObject
 }
 
-func runLocal(fnm string) {
+func runLocal(dir string) {
 	// Reading local file into byte slices
-	b, _ := ioutil.ReadFile(fnm)
-	// Empty byte buffer
-	data := new(bytes.Buffer)
-	// Decoding bytes into image object
-	img, _, _ := image.Decode(bytes.NewReader(b))
-	// Resizing image to lower feature size
-	img = imaging.Resize(img, 227, 227, imaging.Lanczos)
-	// Encoding image into jpeg and loading it on empty byte buffer
-	jpeg.Encode(data, img, nil)
-	// Setting image bytes for processing
-	im.ImageBytes = data.Bytes()
-	// Setting image object for processing
-	im.ImgObject = img
-	// Initialising image tensor
-	im.SetImgTensor()
-	// Executing detection job
-	detection := runTfSession()
-	// Printing results
-	fmt.Print(detection, "\n")
+	fl, _ := ioutil.ReadDir(dir)
+	for i := 0; i < len(fl); i++ {
+		if u.AvailableFormat(filepath.Ext(fl[i].Name())) {
+			log.Print("Processing: " + dir + "/" + fl[i].Name())
+			// Resize and crop the srcImage to fill the 100x100px area.
+			b, _ := ioutil.ReadFile(dir + "/" + fl[i].Name())
+			// Empty byte buffer
+			data := new(bytes.Buffer)
+			// Decoding bytes into image object
+			img, _, _ := image.Decode(bytes.NewReader(b))
+			// Resizing image to lower feature size
+			img = imaging.Resize(img, 227, 227, imaging.Lanczos)
+			// Encoding image into jpeg and loading it on empty byte buffer
+			jpeg.Encode(data, img, nil)
+			// Setting image bytes for processing
+			im.ImageBytes = data.Bytes()
+			// Setting image object for processing
+			im.ImgObject = img
+			// Initialising image tensor
+			im.SetImgTensor()
+			// Executing detection job
+			detection := runTfSession()
+			// Printing results
+			fmt.Print(detection, "\n")
+		}
+	}
 }
 
 func runApi(port string) {
@@ -220,7 +228,7 @@ func runApi(port string) {
 func main() {
 	mode := flag.Int("m", 0, "Run time mode: 0 => local, 1 => api")
 	useCase := flag.String("u", "", "Use case to run")
-	imgFile := flag.String("img", "", "Path of a JPG image to use for input")
+	imgDir := flag.String("img-dir", "", "Path of a JPG image to use for input")
 	azureVision := flag.String("az", "", "Use Azure Vision Model")
 	flag.Parse()
 	modelToRun := *useCase
@@ -278,7 +286,7 @@ func main() {
 			runApi(":8000")
 		} else {
 			log.Print("Running bash api")
-			runLocal(*imgFile)
+			runLocal(*imgDir)
 		}
 	}
 }
