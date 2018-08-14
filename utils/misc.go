@@ -7,6 +7,8 @@ import (
 	"fmt"
 	)
 
+var fileFormats  = []string{".jpg", ".jpeg", ".png"}
+
 func AvailableUseCases()[]string {
 	var usecases []string
 	fl, err := ioutil.ReadDir("data/useCases")
@@ -44,6 +46,17 @@ func GetObjectLen(object []float32)int {
 		curObj++
 	}
 	return curObj
+}
+
+func AvailableFormat(fmt string)bool {
+	return contains(fileFormats, fmt)
+}
+
+func SanitiseString(str string)string {
+	if len(str) < 1 {
+		return "null"
+	}
+	return str
 }
 
 // helper function to check if

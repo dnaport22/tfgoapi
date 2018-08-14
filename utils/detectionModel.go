@@ -36,4 +36,5 @@ func (m *Model) LoadManifest() {
 	json.Unmarshal(byteValue, &manifestData)
 	m.Description  = manifestData.Description
 	m.Name  = manifestData.Name
+	log.Print(fmt.Sprintf("Loaded graph\n\tName: %s\n\tDescription: %s", manifestData.Name, manifestData.Description))
 }

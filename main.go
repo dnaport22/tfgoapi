@@ -18,6 +18,9 @@ import (
 	"github.com/disintegration/imaging"
 		azure "tfGraphApi/third-party/azurevision"
 	"path/filepath"
+			"strconv"
+	"os"
+	"encoding/csv"
 )
 
 var im u.Img
@@ -36,7 +39,6 @@ func loadGraph() {
 	detectionGraph.DetectionClasses = graph.Operation("detection_classes")
 	detectionGraph.BoundingBoxes = graph.Operation("detection_boxes")
 	detectionGraph.NumDetections = graph.Operation("num_detections")
-	log.Print(fmt.Sprintf("Loaded graph\n\tName: %s\n\tDescription: %s", model.Name, model.Description))
 }
 
 func GetPeople(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +193,10 @@ func runTfSession() []u.DetectedObject {
 func runLocal(dir string) {
 	// Reading local file into byte slices
 	fl, _ := ioutil.ReadDir(dir)
+	// Store detected objects
+	output := [][]string{}
+	// Count of detected objects
+	detectionCount := 0
 	for i := 0; i < len(fl); i++ {
 		if u.AvailableFormat(filepath.Ext(fl[i].Name())) {
 			log.Print("Processing: " + dir + "/" + fl[i].Name())
@@ -212,10 +218,34 @@ func runLocal(dir string) {
 			im.SetImgTensor()
 			// Executing detection job
 			detection := runTfSession()
-			// Printing results
-			fmt.Print(detection, "\n")
+			for _, v := range detection {
+				output = append(output,
+					[]string{strconv.Itoa(detectionCount),
+					fl[i].Name(),
+					strconv.Itoa(v.NumberOfPeopleDetected),
+					strconv.Itoa(v.ObjectId),
+					u.SanitiseString(v.Gender),
+					strconv.Itoa(v.Age),
+					strconv.Itoa(v.Clothing.Indian),
+					strconv.Itoa(v.Clothing.Western)},
+					)
+			}
+			detectionCount++
 		}
 	}
+	// Writing to CSV
+	log.Println("Writing results to csv")
+	file, _ := os.Create(fmt.Sprintf("%s_results.csv", dir))
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	// Headers
+	headers := []string{"Frame Id", "Frame Name" ,"People Detected", "Object Id", "Gender", "Age",
+	"Indian", "Western"}
+	writer.Write(headers)
+	for _, v := range output {
+		writer.Write(v)
+	}
+	log.Println(fmt.Sprintf("Finished writing results to csv -> %s_results.csv", dir))
 }
 
 func runApi(port string) {
