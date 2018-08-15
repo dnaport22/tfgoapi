@@ -21,7 +21,8 @@ import (
 			"strconv"
 	"os"
 	"encoding/csv"
-	)
+	"strings"
+)
 
 var im u.Img
 var model u.Model
@@ -146,6 +147,7 @@ func runTfSession() []u.DetectedObject {
 		azCustomVisionOut := make(chan []int)
 
 		var face azure.Face
+		var tags []string
 		var indianClothes int
 		var westernClothes int
 
@@ -163,6 +165,7 @@ func runTfSession() []u.DetectedObject {
 			select {
 			case msg1 := <-azCloudVisionOut:
 				if len(msg1.Faces) > 0 {
+					tags = msg1.Description.Tags
 					face = msg1.Faces[0]
 				}
 			case msg2 := <-azCustomVisionOut:
@@ -175,12 +178,13 @@ func runTfSession() []u.DetectedObject {
 
 		detectedObject = append(detectedObject, u.DetectedObject{
 			ObjectId: curObj,
-			Age: face.Age, Gender: face.Gender,
+			Age: face.Age, Gender: &u.Gender{Label:face.Gender, Assoc:tags},
 			ObjectBox: &u.BBox{MinX: x1, MinY: y1, MaxX: x2, MaxY: y2},
 			FaceBox: &u.BBox{MinX: float32(faceBox.Left), MinY: float32(faceBox.Top),
 			MaxX: float32(faceBox.Width),
 			MaxY: float32(faceBox.Height)},
-			Clothing: &u.AzureClothing{Indian: indianClothes, Western: westernClothes},
+			Clothing: &u.Clothing{
+				Group: &u.AzureClothing{Indian: indianClothes, Western: westernClothes}, Assoc:tags},
 			NumberOfPeopleDetected: u.GetObjectLen(probabilities),
 		})
 		curObj++
@@ -214,9 +218,11 @@ func runLocal(dir string) {
 			for _, v := range detection {
 				ageAgg := make(chan string)
 				clothingAgg := make(chan string)
+				clothingTagAgg := make(chan string)
 
 				var age string
 				var clothing string
+				var cTag string
 
 				go func() {
 					ageAgg <- v.AgeGroup()
@@ -226,12 +232,18 @@ func runLocal(dir string) {
 					clothingAgg <- v.Clothing.WhichClothing()
 				}()
 
+				go func() {
+					clothingTagAgg <- strings.Join(v.Clothing.AssocTags(), ",")
+				}()
+
 				for i := 0; i < 2; i++ {
 					select {
 					case msg1 := <-ageAgg:
 						age = msg1
 					case msg2 := <-clothingAgg:
 						clothing = msg2
+					case msg3 := <-clothingTagAgg:
+						cTag = msg3
 					}
 				}
 				output = append(output,
@@ -239,9 +251,10 @@ func runLocal(dir string) {
 					fl[i].Name(),
 					strconv.Itoa(v.NumberOfPeopleDetected),
 					strconv.Itoa(v.ObjectId),
-					u.SanitiseString(v.Gender),
+					u.SanitiseString(v.Gender.Label),
 					age,
-					clothing},
+					clothing,
+					cTag},
 					)
 			}
 			detectionCount++
@@ -254,7 +267,7 @@ func runLocal(dir string) {
 	defer writer.Flush()
 	// Headers
 	headers := []string{"Frame Id", "Frame Name" ,"People Detected", "Object Id", "Gender", "Age",
-	"Clothing"}
+	"Clothing", "Clothing Tags"}
 	writer.Write(headers)
 	for _, v := range output {
 		writer.Write(v)
