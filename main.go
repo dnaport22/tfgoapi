@@ -21,7 +21,7 @@ import (
 			"strconv"
 	"os"
 	"encoding/csv"
-)
+	)
 
 var im u.Img
 var model u.Model
@@ -112,7 +112,7 @@ func runTfSession() []u.DetectedObject {
 
 	// Outputs
 	probabilities := output[0].Value().([][]float32)[0]
-	classes := output[1].Value().([][]float32)[0]
+	//classes := output[1].Value().([][]float32)[0]
 	boxes := output[2].Value().([][][]float32)[0]
 
 	// Transform the decoded YCbCr JPG image into RGBA
@@ -152,7 +152,7 @@ func runTfSession() []u.DetectedObject {
 		go func(data []byte) {
 			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true})
 			azCloudVisionOut <- out
-		}(azureData.Bytes())
+		}(im.ImageBytes)
 
 		go func() {
 			iC, wC := runAzureModel()
@@ -173,9 +173,8 @@ func runTfSession() []u.DetectedObject {
 		// Making variable short to read
 		faceBox := face.FaceRectangle
 
-		label, prob := labels.GetLabel(curObj, probabilities, classes)
 		detectedObject = append(detectedObject, u.DetectedObject{
-			ObjectId: curObj, Label: label, Probability: int(prob),
+			ObjectId: curObj,
 			Age: face.Age, Gender: face.Gender,
 			ObjectBox: &u.BBox{MinX: x1, MinY: y1, MaxX: x2, MaxY: y2},
 			FaceBox: &u.BBox{MinX: float32(faceBox.Left), MinY: float32(faceBox.Top),
@@ -202,16 +201,10 @@ func runLocal(dir string) {
 			log.Print("Processing: " + dir + "/" + fl[i].Name())
 			// Resize and crop the srcImage to fill the 100x100px area.
 			b, _ := ioutil.ReadFile(dir + "/" + fl[i].Name())
-			// Empty byte buffer
-			data := new(bytes.Buffer)
 			// Decoding bytes into image object
 			img, _, _ := image.Decode(bytes.NewReader(b))
-			// Resizing image to lower feature size
-			img = imaging.Resize(img, 227, 227, imaging.Lanczos)
-			// Encoding image into jpeg and loading it on empty byte buffer
-			jpeg.Encode(data, img, nil)
 			// Setting image bytes for processing
-			im.ImageBytes = data.Bytes()
+			im.ImageBytes = b
 			// Setting image object for processing
 			im.ImgObject = img
 			// Initialising image tensor
