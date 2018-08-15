@@ -150,7 +150,7 @@ func runTfSession() []u.DetectedObject {
 		var westernClothes int
 
 		go func(data []byte) {
-			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true})
+			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true, Description:true})
 			azCloudVisionOut <- out
 		}(im.ImageBytes)
 
@@ -212,15 +212,36 @@ func runLocal(dir string) {
 			// Executing detection job
 			detection := runTfSession()
 			for _, v := range detection {
+				ageAgg := make(chan string)
+				clothingAgg := make(chan string)
+
+				var age string
+				var clothing string
+
+				go func() {
+					ageAgg <- v.AgeGroup()
+				}()
+
+				go func() {
+					clothingAgg <- v.Clothing.WhichClothing()
+				}()
+
+				for i := 0; i < 2; i++ {
+					select {
+					case msg1 := <-ageAgg:
+						age = msg1
+					case msg2 := <-clothingAgg:
+						clothing = msg2
+					}
+				}
 				output = append(output,
 					[]string{strconv.Itoa(detectionCount),
 					fl[i].Name(),
 					strconv.Itoa(v.NumberOfPeopleDetected),
 					strconv.Itoa(v.ObjectId),
 					u.SanitiseString(v.Gender),
-					strconv.Itoa(v.Age),
-					strconv.Itoa(v.Clothing.Indian),
-					strconv.Itoa(v.Clothing.Western)},
+					age,
+					clothing},
 					)
 			}
 			detectionCount++
@@ -233,7 +254,7 @@ func runLocal(dir string) {
 	defer writer.Flush()
 	// Headers
 	headers := []string{"Frame Id", "Frame Name" ,"People Detected", "Object Id", "Gender", "Age",
-	"Indian", "Western"}
+	"Clothing"}
 	writer.Write(headers)
 	for _, v := range output {
 		writer.Write(v)
