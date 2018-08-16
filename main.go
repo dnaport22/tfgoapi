@@ -2,6 +2,7 @@ package main
 
 import (
 		u "tfGraphApi/utils"
+		c "tfGraphApi/core"
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"log"
 	"fmt"
@@ -29,9 +30,6 @@ var model u.Model
 var labels u.Labels
 var detectionGraph u.DetectionGraph
 
-var azureTfModel u.Model
-var azureTfLabels u.Labels
-var azureGraph u.DetectionGraph
 
 func loadGraph() {
 	graph := detectionGraph.Graph
@@ -71,27 +69,6 @@ func GetPeople(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(detection); err != nil {
 		panic(err)
 	}
-}
-
-func runAzureModel() (int, int){
-
-	input := azureGraph.Graph.Operation("Placeholder")
-	out := azureGraph.Graph.Operation("loss")
-
-	output, err := azureGraph.Session.Run(
-		map[tf.Output]*tf.Tensor{
-			input.Output(0): im.NormalisedImgTensor()[0],
-		},
-		[]tf.Output{
-			out.Output(0),
-		},
-		nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	probabilities := output[0].Value().([][]float32)[0]
-
-	return int(probabilities[0]*100), int(probabilities[1]*100)
 }
 
 func runTfSession() []u.DetectedObject {
@@ -156,10 +133,10 @@ func runTfSession() []u.DetectedObject {
 			azCloudVisionOut <- out
 		}(im.ImageBytes)
 
-		go func() {
-			iC, wC := runAzureModel()
+		go func(img u.Img) {
+			iC, wC := c.RunAzureModel(img)
 			azCustomVisionOut <- []int{iC, wC}
-		}()
+		}(im)
 
 		for i := 0; i < 2; i++ {
 			select {
@@ -301,18 +278,18 @@ func main() {
 	labels.Load(modelToRun)
 
 	if len(*azureVision) > 0 {
-		azureTfModel.Load(*azureVision)
-		azureTfLabels.Load(*azureVision)
+		c.AzureTfModel.Load(*azureVision)
+		c.AzureTfLabels.Load(*azureVision)
 
 		// Construct an in-memory graph from the serialized form.
-		azureGraph.Graph = tf.NewGraph()
-		if err := azureGraph.Graph.Import(azureTfModel.Model, ""); err != nil {
+		c.AzureGraph.Graph = tf.NewGraph()
+		if err := c.AzureGraph.Graph.Import(c.AzureTfModel.Model, ""); err != nil {
 			log.Fatal(err)
 		}
 
 		// Create a session for inference over graph.
-		session, err := tf.NewSession(azureGraph.Graph, nil)
-		azureGraph.Session = session
+		session, err := tf.NewSession(c.AzureGraph.Graph, nil)
+		c.AzureGraph.Session = session
 		if err != nil {
 			log.Fatal(err)
 		}
