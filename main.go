@@ -8,13 +8,10 @@ import (
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
-	"net/http"
-		"io/ioutil"
+			"io/ioutil"
 					"bytes"
 	"image"
-	"encoding/json"
-	"github.com/gorilla/mux"
-				"flag"
+						"flag"
 	"image/jpeg"
 	"github.com/disintegration/imaging"
 		azure "tfGraphApi/third-party/azurevision"
@@ -30,7 +27,6 @@ var model u.Model
 var labels u.Labels
 var detectionGraph u.DetectionGraph
 
-
 func loadGraph() {
 	graph := detectionGraph.Graph
 	detectionGraph.ImageOperation = graph.Operation("image_tensor")
@@ -38,37 +34,6 @@ func loadGraph() {
 	detectionGraph.DetectionClasses = graph.Operation("detection_classes")
 	detectionGraph.BoundingBoxes = graph.Operation("detection_boxes")
 	detectionGraph.NumDetections = graph.Operation("num_detections")
-}
-
-func GetPeople(w http.ResponseWriter, r *http.Request) {
-	// reading image data into byte slices
-	contents, _ := ioutil.ReadAll(r.Body)
-	// Augmenting contents
-	r.Body = ioutil.NopCloser(bytes.NewReader(contents))
-	defer r.Body.Close()
-	// Empty byte buffer
-	data := new(bytes.Buffer)
-	// Decoding byte slice into image.Image
-	img, _, _ := image.Decode(r.Body)
-	// Resizing image to lower feature size
-	img = imaging.Resize(img, 227, 227, imaging.Lanczos)
-
-	// Encoding image into jpeg and loading it on empty byte buffer
-	jpeg.Encode(data, img, nil)
-	// Setting image bytes for processing
-	im.ImageBytes = data.Bytes()
-	// Setting image object for processing
-	im.ImgObject = img
-	// Initialising image tensor
-	im.SetImgTensor()
-
-	detection := runTfSession()
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(detection); err != nil {
-		panic(err)
-	}
 }
 
 func runTfSession() []u.DetectedObject {
@@ -252,12 +217,6 @@ func runLocal(dir string) {
 	log.Println(fmt.Sprintf("Finished writing results to csv -> %s_results.csv", dir))
 }
 
-func runApi(port string) {
-	//Initialising routes
-	router := mux.NewRouter()
-	router.HandleFunc("/get-people", GetPeople).Methods("POST")
-	log.Fatal(http.ListenAndServe(port, router))
-}
 
 func main() {
 	mode := flag.Int("m", 0, "Run time mode: 0 => local, 1 => api")
@@ -317,7 +276,7 @@ func main() {
 	} else {
 		if *mode == 1 {
 			log.Print("Running web api")
-			runApi(":8000")
+			c.RunApi(":8000")
 		} else {
 			log.Print("Running bash api")
 			runLocal(*imgDir)
