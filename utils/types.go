@@ -3,7 +3,17 @@ package utils
 import (
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"image"
-)
+	)
+
+type Clothing struct {
+	Group *AzureClothing `json:"ClothingGroup,omitempty"`
+	Assoc []string
+}
+
+type Gender struct {
+	Label string `json:"Gender,omitempty"`
+	Assoc []string
+}
 
 type DetectedObject struct {
 	ObjectId int `json:"Id,omitempty"`
@@ -11,10 +21,18 @@ type DetectedObject struct {
 	Probability int `json:"Probability,omitempty"`
 	ObjectBox *BBox `json:"ObjectBoundingBox,omitempty"`
 	Age int `json:"Age,omitempty"`
-	Gender string `json:"Gender,omitempty"`
+	Gender *Gender `json:"Gender,omitempty"`
 	FaceBox *BBox `json:"FaceBoundingBox,omitempty"`
-	Clothing *AzureClothing `json:"Clothing,omitempty"`
+	Clothing *Clothing `json:"Clothing,omitempty"`
 	NumberOfPeopleDetected int `json:"NumberOfPeopleDetected,omitempty"`
+}
+
+type TrackableObject struct {
+	ObjectId string `json:"Id,omitempty"`
+	FrameName string `json:"frame_name,omitempty"`
+	Counted bool `json:"Counted,omitempty"`
+	Centroids [][]float32
+	DistanceFromPrevious float32
 }
 
 type DetectionGraph struct {

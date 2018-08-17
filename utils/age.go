@@ -1,20 +1,24 @@
 package utils
 
 func (a *DetectedObject) AgeGroup()string  {
-	switch age := a.Age; {
-	case age > 0 && age < 4:
+	age := a.Age
+	if age > 1 && age <= 3 {
 		return "0-3"
-	case age > 3 && age < 13:
-		return "4-12"
-	case age > 12 && age < 26:
-		return "13-25"
-	case age > 25 && age < 46:
-		return "26-45"
-	case age > 45 && age < 61:
-		return "46-60"
-	case age > 61:
-		return "60+"
-	default:
-		return "null"
 	}
+	if age > 3 && age <= 12 {
+		return "3-12"
+	}
+	if age > 12 && age <= 25 {
+		return "12-25"
+	}
+	if age > 25 && age <= 45 {
+		return "25-45"
+	}
+	if age > 45 && age <= 60 {
+		return "45-60"
+	}
+	if age > 60 {
+		return "60+"
+	}
+	return "null"
 }

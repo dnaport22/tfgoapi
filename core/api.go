@@ -7,11 +7,7 @@ import (
 	"image"
 	"github.com/disintegration/imaging"
 	"image/jpeg"
-	"encoding/json"
-	u "tfGraphApi/utils"
-)
-
-var im u.Img
+		)
 
 func GetPeople(w http.ResponseWriter, r *http.Request) {
 	// reading image data into byte slices
@@ -22,7 +18,7 @@ func GetPeople(w http.ResponseWriter, r *http.Request) {
 	// Empty byte buffer
 	data := new(bytes.Buffer)
 	// Decoding byte slice into image.Image
-	img, _, _ := image.Decode(r.Body)
+	img, name, _ := image.Decode(r.Body)
 	// Resizing image to lower feature size
 	img = imaging.Resize(img, 227, 227, imaging.Lanczos)
 
@@ -35,11 +31,11 @@ func GetPeople(w http.ResponseWriter, r *http.Request) {
 	// Initialising image tensor
 	im.SetImgTensor()
 
-	detection := runTfSession()
+	runTfSession(0, name)
 
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(detection); err != nil {
-		panic(err)
-	}
+	//w.WriteHeader(http.StatusOK)
+	//w.Header().Set("Content-Type", "application/json")
+	//if err := json.NewEncoder(w).Encode(detection); err != nil {
+	//	panic(err)
+	//}
 }

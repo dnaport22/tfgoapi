@@ -5,7 +5,9 @@ import (
 	"log"
 		"strings"
 	"fmt"
-	)
+	"os/exec"
+	"math"
+)
 
 var fileFormats  = []string{".jpg", ".jpeg", ".png"}
 
@@ -48,6 +50,16 @@ func GetObjectLen(object []float32)int {
 	return curObj
 }
 
+func GetNumPeopleDetected(probabilities []float32, classes []float32)int {
+	curObj := 0
+	people := 0
+	for probabilities[curObj] > 0.5 && classes[curObj] == 1 {
+		curObj++
+		people++
+	}
+	return people
+}
+
 func AvailableFormat(fmt string)bool {
 	return contains(fileFormats, fmt)
 }
@@ -68,4 +80,22 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func CalculateCentroid(x1 float32, y1 float32, x2 float32, y2 float32)(float32, float32) {
+	return (x1 + x2) / 2, (y1 + y2) / 2
+}
+
+func EuclideanDistance(x1 float32, y1 float32, x2 float32, y2 float32)float32 {
+	dist := math.Sqrt(
+		math.Pow((float64(x1)-float64(x2)), 2) + math.Pow((float64(y1)-float64(y2)), 2))
+	return float32(dist) / 100 *2
+}
+
+func GenUuid()string {
+	out, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(out)
 }
