@@ -1,2 +1,7 @@
 .idea/
 example_images/
+.DS_Store
+experiments
+*.jpg
+*.jpeg
+*.png
