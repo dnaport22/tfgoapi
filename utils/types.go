@@ -33,6 +33,7 @@ type TrackableObject struct {
 	Counted bool `json:"Counted,omitempty"`
 	Centroids [][]float32
 	DistanceFromPrevious float32
+	ImageData []byte
 }
 
 type DetectionGraph struct {

@@ -10,7 +10,11 @@ import ("log"
 	"bytes"
 	"path/filepath"
 	"fmt"
-			)
+	"math"
+	azure "tfGraphApi/third-party/azurevision"
+	"os"
+	"encoding/csv"
+	)
 
 
 func RunAzureModel(im u.Img) (int, int){
@@ -62,11 +66,46 @@ func RunLocal(dir string) {
 		}
 	}
 	peopleCount := 0
+	// Initialising Azure Api
+	vision, _ := azure.New("7b11a4bfca114ca2949c1d0f659e3aed",
+		"https://uksouth.api.cognitive.microsoft.com/vision/v1.0")
+	var output [][]string
 	for _, v := range Trackers {
-		fmt.Println(v)
 		peopleCount += len(v.Centroids)
+		azCloudVisionOut := make(chan azure.VisionResult)
+		azCustomVisionOut := make(chan []int)
+		var face azure.Face
+		var clothing u.Clothing
+		go func(data []byte) {
+			log.Println("Running age-gender detection job")
+			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true, Description:true})
+			azCloudVisionOut <- out
+		}(v.ImageData)
+		go func(img u.Img) {
+			log.Println("Running clothing classification job")
+			iC, wC := RunAzureModel(img)
+			azCustomVisionOut <- []int{iC, wC}
+		}(im)
+		for i := 0; i < 2; i++ {
+			select {
+			case msg1 := <-azCloudVisionOut:
+				if len(msg1.Faces) > 0 {
+					face = msg1.Faces[0]
+				}
+			case msg2 := <-azCustomVisionOut:
+				clothing = u.Clothing{
+					&u.AzureClothing{Indian: int(msg2[1]), Western: int(msg2[0])},
+					nil}
+			}
+		}
+		output = append(output, []string{
+			v.FrameName,
+			face.Gender,
+			u.AgeGroup(face.Age),
+			clothing.WhichClothing(),
+		})
 	}
-	fmt.Printf("Total people count: %v", peopleCount)
+	dumpToCsv(output, dir)
 }
 
 func runTfSession(frameId int, frameName string) {
@@ -105,28 +144,48 @@ func runTfSession(frameId int, frameName string) {
 		centroidX, centroidY := u.CalculateCentroid(x1, y1, x2, y2)
 		boundingBox = append(boundingBox, []float32{x1, y1, x2 ,y2, centroidX, centroidY})
 		// Detection boundary Y <- 150-200
-		for i, _ := range PreviousBox {
-			for j, _ := range boundingBox {
-				distFromPrev := u.EuclideanDistance(
-					PreviousBox[i][4], boundingBox[j][4],
-					PreviousBox[i][5], boundingBox[j][5])
-				fmt.Println(distFromPrev)
-				if distFromPrev > 5 {
-					updateTracker(frameName, boundingBox, distFromPrev)
+		if len(Trackers) == 0 {
+			updateTracker(frameName, boundingBox, 0, im.ImageBytes)
+		} else {
+			for i, _ := range PreviousBox {
+				for j, _ := range boundingBox {
+					distFromPrev := u.EuclideanDistance(
+						PreviousBox[i][4], boundingBox[j][4],
+						PreviousBox[i][5], boundingBox[j][5])
+					if math.Round(float64(distFromPrev)) > float64(5) {
+						updateTracker(frameName, boundingBox, distFromPrev, im.ImageBytes)
+					}
 				}
 			}
 		}
+
 		curObj++
 		PreviousBox = boundingBox
 	}
 }
 
-func updateTracker(fnm string, bbox [][]float32, dist float32) {
+func updateTracker(fnm string, bbox [][]float32, dist float32, img []byte) {
 	Trackers = append(Trackers, u.TrackableObject{
 		ObjectId: u.GenUuid(),
 		FrameName: fnm,
 		Counted: true,
 		Centroids: bbox,
 		DistanceFromPrevious: dist,
+		ImageData: img,
 	})
+}
+
+func dumpToCsv(output [][]string, dir string)  {
+	// Writing to CSV
+	log.Println("Writing results to csv")
+	file, _ := os.Create(fmt.Sprintf("%s_results.csv", dir))
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	// Headers
+	headers := []string{"Frame Name" , "Gender", "Age", "Clothing"}
+	writer.Write(headers)
+	for _, v := range output {
+		writer.Write(v)
+	}
+	log.Println(fmt.Sprintf("Finished writing results to csv -> %s_results.csv", dir))
 }

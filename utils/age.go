@@ -1,7 +1,7 @@
 package utils
 
-func (a *DetectedObject) AgeGroup()string  {
-	age := a.Age
+func AgeGroup(a int)string  {
+	age := a
 	if age > 1 && age <= 3 {
 		return "0-3"
 	}

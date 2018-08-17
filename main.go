@@ -1,126 +1,18 @@
 package main
 
 import (
-		u "tfGraphApi/utils"
-		c "tfGraphApi/core"
+	u "tfGraphApi/utils"
+	c "tfGraphApi/core"
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"log"
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
-								"bytes"
-	"image"
-						"flag"
-	"image/jpeg"
-	"github.com/disintegration/imaging"
-		azure "tfGraphApi/third-party/azurevision"
-							)
+	"flag"
+	)
 
-var im u.Img
 var model u.Model
 var labels u.Labels
-var detectionGraph u.DetectionGraph
-
-
-func runTfSession() []u.DetectedObject {
-	// Run tensorflow session
-	output, err := detectionGraph.Session.Run(
-		map[tf.Output]*tf.Tensor{
-			detectionGraph.ImageOperation.Output(0): im.ImgTensor,
-		},
-		[]tf.Output{
-			detectionGraph.DetectionScore.Output(0),
-			detectionGraph.DetectionClasses.Output(0),
-			detectionGraph.BoundingBoxes.Output(0),
-			detectionGraph.NumDetections.Output(0),
-		},
-		nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Outputs
-	probabilities := output[0].Value().([][]float32)[0]
-	//classes := output[1].Value().([][]float32)[0]
-	boxes := output[2].Value().([][][]float32)[0]
-
-	// Transform the decoded YCbCr JPG image into RGBA
-	b := im.ImgObject.Bounds()
-	img := image.NewRGBA(b)
-
-	// Initialising Azure Api
-	vision, _ := azure.New("7b11a4bfca114ca2949c1d0f659e3aed",
-		"https://uksouth.api.cognitive.microsoft.com/vision/v1.0")
-
-	var detectedObject []u.DetectedObject
-
-	curObj := 0
-	for probabilities[curObj] > 0.4 {
-		x1 := float32(img.Bounds().Max.X) * boxes[curObj][1]
-		x2 := float32(img.Bounds().Max.X) * boxes[curObj][3]
-		y1 := float32(img.Bounds().Max.Y) * boxes[curObj][0]
-		y2 := float32(img.Bounds().Max.Y) * boxes[curObj][2]
-
-		// cropping image for azure vision api
-		cropped := imaging.Crop(im.ImgObject, image.Rectangle{
-			image.Point{int(x1), int(y1)},
-			image.Point{int(x2), int(y2)}})
-
-		// Empty buffer to store azure vision api results
-		azureData := new(bytes.Buffer)
-		// Encoding cropped image into jpeg
-		jpeg.Encode(azureData, cropped, nil)
-		// Calling azure vision api
-		azCloudVisionOut := make(chan azure.VisionResult)
-		azCustomVisionOut := make(chan []int)
-
-		var face azure.Face
-		var tags []string
-		var indianClothes int
-		var westernClothes int
-
-		go func(data []byte) {
-			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true, Description:true})
-			azCloudVisionOut <- out
-		}(im.ImageBytes)
-
-		go func(img u.Img) {
-			iC, wC := c.RunAzureModel(img)
-			azCustomVisionOut <- []int{iC, wC}
-		}(im)
-
-		for i := 0; i < 2; i++ {
-			select {
-			case msg1 := <-azCloudVisionOut:
-				if len(msg1.Faces) > 0 {
-					tags = msg1.Description.Tags
-					face = msg1.Faces[0]
-				}
-			case msg2 := <-azCustomVisionOut:
-				westernClothes = msg2[1]
-				indianClothes = msg2[0]
-			}
-		}
-		// Making variable short to read
-		faceBox := face.FaceRectangle
-
-		detectedObject = append(detectedObject, u.DetectedObject{
-			ObjectId: curObj,
-			Age: face.Age, Gender: &u.Gender{Label:face.Gender, Assoc:tags},
-			ObjectBox: &u.BBox{MinX: x1, MinY: y1, MaxX: x2, MaxY: y2},
-			FaceBox: &u.BBox{MinX: float32(faceBox.Left), MinY: float32(faceBox.Top),
-			MaxX: float32(faceBox.Width),
-			MaxY: float32(faceBox.Height)},
-			Clothing: &u.Clothing{
-				Group: &u.AzureClothing{Indian: indianClothes, Western: westernClothes}, Assoc:tags},
-			NumberOfPeopleDetected: u.GetObjectLen(probabilities),
-		})
-		curObj++
-	}
-
-	return detectedObject
-}
-
 
 func main() {
 	mode := flag.Int("m", 0, "Run time mode: 0 => local, 1 => api")
