@@ -36,6 +36,20 @@ type TrackableObject struct {
 	ImageData []byte
 }
 
+type Train struct {
+	Tx float32
+	Ty float32
+	FrameName string
+}
+
+
+type Neighbors struct {
+	Nx float32
+	Ny float32
+	Dist float32
+	FrameName string
+}
+
 type DetectionGraph struct {
 	Graph *tf.Graph
 	Session *tf.Session

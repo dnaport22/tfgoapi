@@ -1,8 +1,8 @@
 package main
 
 import (
-	u "tfGraphApi/utils"
-	c "tfGraphApi/core"
+	u "./utils"
+	c "./core"
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"log"
 	"fmt"
@@ -19,6 +19,8 @@ func main() {
 	useCase := flag.String("u", "", "Use case to run")
 	imgDir := flag.String("img-dir", "", "Path of a JPG image to use for input")
 	azureVision := flag.String("az", "", "Use Azure Vision Model")
+	pThresh := flag.Float64("p", 0.6, "Probability threshold")
+	clean := flag.Bool("c", true, "Clean after reading: 0 => yes, 1 => no")
 	flag.Parse()
 	modelToRun := *useCase
 	availableUseCases := u.AvailableUseCases()
@@ -73,6 +75,8 @@ func main() {
 			c.RunApi(":8000")
 		} else {
 			log.Print("Running bash api")
+			c.ProbabilityThreshold = *pThresh
+			c.CleaningDir = *clean
 			c.RunLocal(*imgDir)
 		}
 	}

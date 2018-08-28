@@ -7,7 +7,7 @@ import (
 	"image"
 	"github.com/disintegration/imaging"
 	"image/jpeg"
-		)
+			)
 
 func GetPeople(w http.ResponseWriter, r *http.Request) {
 	// reading image data into byte slices

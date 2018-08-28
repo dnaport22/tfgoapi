@@ -18,6 +18,16 @@ func decodeJpegGraph() (graph *tf.Graph, input, output tf.Output, err error) {
 	return graph, input, output, err
 }
 
+func decodeBmpGraph() (graph *tf.Graph, input, output tf.Output, err error) {
+	s := op.NewScope()
+	input = op.Placeholder(s, tf.String)
+	output = op.ExpandDims(s,
+		op.DecodeBmp(s, input, op.DecodeBmpChannels(int64(3))),
+		op.Const(s.SubScope("make_batch"), int32(0)))
+	graph, err = s.Finalize()
+	return graph, input, output, err
+}
+
 func decodePngGraph() (graph *tf.Graph, input, output tf.Output, err error) {
 	s := op.NewScope()
 	input = op.Placeholder(s, tf.String)

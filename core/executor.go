@@ -1,20 +1,22 @@
 package core
 
 import ("log"
-	u "tfGraphApi/utils"
+	u "../utils"
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"github.com/gorilla/mux"
 	"net/http"
 	"io/ioutil"
 	"image"
-	"bytes"
-	"path/filepath"
-	"fmt"
+			"fmt"
+			"os"
+		azure "../third-party/azurevision"
 	"math"
-	azure "tfGraphApi/third-party/azurevision"
-	"os"
-	"encoding/csv"
-	)
+	"time"
+	"path/filepath"
+	"bytes"
+	"strings"
+	"strconv"
+)
 
 
 func RunAzureModel(im u.Img) (int, int){
@@ -48,23 +50,42 @@ func RunApi(port string) {
 func RunLocal(dir string) {
 	// Reading local file into byte slices
 	fl, _ := ioutil.ReadDir(dir)
-	for i := 0; i < len(fl); i++ {
-		if u.AvailableFormat(filepath.Ext(fl[i].Name())) {
-			log.Print("Processing: " + dir + "/" + fl[i].Name())
-			// Resize and crop the srcImage to fill the 100x100px area.
-			b, _ := ioutil.ReadFile(dir + "/" + fl[i].Name())
-			// Decoding bytes into image object
-			img, _, _ := image.Decode(bytes.NewReader(b))
-			// Setting image bytes for processing
-			im.ImageBytes = b
-			// Setting image object for processing
-			im.ImgObject = img
-			// Initialising image tensor
-			im.SetImgTensor()
-			// Executing detection job
-			runTfSession(i, fl[i].Name())
+	if len(fl) > 0 {
+		log.Println("Reading image directory" + dir)
+		for i := 0; i < len(fl); i++ {
+			if u.AvailableFormat(filepath.Ext(fl[i].Name())) {
+				log.Println("Processing: " + dir + "/" + fl[i].Name())
+				// Resize and crop the srcImage to fill the 100x100px area.
+				b, _ := ioutil.ReadFile(dir + "/" + fl[i].Name())
+				// Decoding bytes into image object
+				img, _, _ := image.Decode(bytes.NewReader(b))
+				// Setting image bytes for processing
+				im.ImageBytes = b
+				// Setting image object for processing
+				im.ImgObject = img
+				// Initialising image tensor
+				im.SetImgTensor()
+				// Executing detection job
+				runTfSession(i, fl[i].Name())
+				if CleaningDir {
+					os.Remove(dir + "/" + fl[i].Name())
+				}
+			}
 		}
+		output := additionalDetection()
+		fmt.Println(output)
+		dumpToCsv(output, dir)
+		RunLocal(dir)
+	} else {
+		log.Println("Empty image directory " + dir)
+		ImgDirReadAttempts++
+		log.Println("Waiting for image directory " + dir)
+		time.Sleep(5000 * time.Millisecond)
+		RunLocal(dir)
 	}
+}
+
+func additionalDetection()[][]string {
 	peopleCount := 0
 	// Initialising Azure Api
 	vision, _ := azure.New("7b11a4bfca114ca2949c1d0f659e3aed",
@@ -76,13 +97,13 @@ func RunLocal(dir string) {
 		azCustomVisionOut := make(chan []int)
 		var face azure.Face
 		var clothing u.Clothing
-		go func(data []byte) {
-			log.Println("Running age-gender detection job")
-			out, _ := vision.AnalyzeImage(data, azure.VisualFeatures{Faces:true, Description:true})
+		go func(data u.TrackableObject) {
+			log.Printf("Running age-gender detection job %s", data.FrameName)
+			out, _ := vision.AnalyzeImage(data.ImageData, azure.VisualFeatures{Faces:true, Description:true})
 			azCloudVisionOut <- out
-		}(v.ImageData)
+		}(v)
 		go func(img u.Img) {
-			log.Println("Running clothing classification job")
+			log.Printf("Running clothing classification job %s", img.ImgName)
 			iC, wC := RunAzureModel(img)
 			azCustomVisionOut <- []int{iC, wC}
 		}(im)
@@ -102,10 +123,11 @@ func RunLocal(dir string) {
 			v.FrameName,
 			face.Gender,
 			u.AgeGroup(face.Age),
-			clothing.WhichClothing(),
+			strconv.Itoa(clothing.Group.Indian),
+			strconv.Itoa(clothing.Group.Western),
 		})
 	}
-	dumpToCsv(output, dir)
+	return output
 }
 
 func runTfSession(frameId int, frameName string) {
@@ -124,7 +146,6 @@ func runTfSession(frameId int, frameName string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	// Outputs
 	probabilities := output[0].Value().([][]float32)[0]
 	classes := output[1].Value().([][]float32)[0]
@@ -136,24 +157,24 @@ func runTfSession(frameId int, frameName string) {
 
 	curObj := 0
 	var boundingBox [][]float32
-	for probabilities[curObj] > 0.8 && classes[curObj] == 1 {
+	for probabilities[curObj] > float32(ProbabilityThreshold) && classes[curObj] == 1 {
 		x1 := float32(img.Bounds().Max.X) * boxes[curObj][1]
 		x2 := float32(img.Bounds().Max.X) * boxes[curObj][3]
 		y1 := float32(img.Bounds().Max.Y) * boxes[curObj][0]
 		y2 := float32(img.Bounds().Max.Y) * boxes[curObj][2]
 		centroidX, centroidY := u.CalculateCentroid(x1, y1, x2, y2)
 		boundingBox = append(boundingBox, []float32{x1, y1, x2 ,y2, centroidX, centroidY})
-		// Detection boundary Y <- 150-200
+		updateTracker(frameName, boundingBox, im.ImageBytes)
 		if len(Trackers) == 0 {
-			updateTracker(frameName, boundingBox, 0, im.ImageBytes)
+			updateTracker(frameName, boundingBox, im.ImageBytes)
 		} else {
 			for i, _ := range PreviousBox {
 				for j, _ := range boundingBox {
 					distFromPrev := u.EuclideanDistance(
 						PreviousBox[i][4], boundingBox[j][4],
 						PreviousBox[i][5], boundingBox[j][5])
-					if math.Round(float64(distFromPrev)) > float64(5) {
-						updateTracker(frameName, boundingBox, distFromPrev, im.ImageBytes)
+					if math.Round(float64(distFromPrev)) > float64(50) {
+						updateTracker(frameName, boundingBox, im.ImageBytes)
 					}
 				}
 			}
@@ -164,13 +185,12 @@ func runTfSession(frameId int, frameName string) {
 	}
 }
 
-func updateTracker(fnm string, bbox [][]float32, dist float32, img []byte) {
+func updateTracker(fnm string, bbox [][]float32, img []byte) {
 	Trackers = append(Trackers, u.TrackableObject{
 		ObjectId: u.GenUuid(),
 		FrameName: fnm,
 		Counted: true,
 		Centroids: bbox,
-		DistanceFromPrevious: dist,
 		ImageData: img,
 	})
 }
@@ -178,14 +198,9 @@ func updateTracker(fnm string, bbox [][]float32, dist float32, img []byte) {
 func dumpToCsv(output [][]string, dir string)  {
 	// Writing to CSV
 	log.Println("Writing results to csv")
-	file, _ := os.Create(fmt.Sprintf("%s_results.csv", dir))
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-	// Headers
-	headers := []string{"Frame Name" , "Gender", "Age", "Clothing"}
-	writer.Write(headers)
+	file, _ := os.OpenFile(fmt.Sprintf("%s_results.csv", dir), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	for _, v := range output {
-		writer.Write(v)
+		file.WriteString(strings.Join(v, ",") + "\n")
 	}
 	log.Println(fmt.Sprintf("Finished writing results to csv -> %s_results.csv", dir))
 }

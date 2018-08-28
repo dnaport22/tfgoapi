@@ -1,6 +1,6 @@
 package core
 
-import (u "tfGraphApi/utils")
+import (u "../utils")
 
 var im u.Img
 var AzureTfModel u.Model
@@ -10,4 +10,6 @@ var TfGraph u.DetectionGraph
 var Trackers []u.TrackableObject
 var ObjectsTracked int
 var PreviousBox [][]float32
-var ObjectCount int
+var ProbabilityThreshold float64
+var CleaningDir bool
+var ImgDirReadAttempts int

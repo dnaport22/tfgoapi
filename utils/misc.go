@@ -13,7 +13,7 @@ var fileFormats  = []string{".jpg", ".jpeg", ".png"}
 
 func AvailableUseCases()[]string {
 	var usecases []string
-	fl, err := ioutil.ReadDir("data/useCases")
+	fl, err := ioutil.ReadDir("tfGraphApi/data/useCases")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func IsValidUseCase(cases []string, c string)bool {
 }
 
 func GenerateUseCasePath(uc string, data string) (string, string) {
-	baseLoc := "data/useCases"
+	baseLoc := "tfGraphApi/data/useCases"
 	var ext string
 	if data == "model" {
 		ext = ".pb"
@@ -92,10 +92,44 @@ func EuclideanDistance(x1 float32, y1 float32, x2 float32, y2 float32)float32 {
 	return float32(dist) / 100 *2
 }
 
+func CDist(coords_a [][]float32, coords_b []float32)[]float32 {
+	var dist []float32
+	for _, v := range coords_a {
+		d := math.Sqrt(
+			math.Pow((float64(v[4])-float64(coords_b[4])), 2) +
+				math.Pow((float64(v[5])-float64(coords_b[5])), 2))
+		dist = append(dist, float32(d)/100*2)
+	}
+
+	return dist
+}
+
 func GenUuid()string {
 	out, err := exec.Command("uuidgen").Output()
 	if err != nil {
 		log.Fatal(err)
 	}
 	return string(out)
+}
+
+func GetNeighbors(trainingInstance []float32, trainingSet []Train)[]Neighbors {
+	var neighbors []Neighbors
+	var Knn []Neighbors
+	for i, _ := range trainingSet {
+		dist := EuclideanDistance(
+			trainingInstance[0], trainingSet[i].Tx,
+			trainingInstance[1], trainingSet[i].Ty)
+		if dist > 5 {
+			neighbors = append(neighbors, Neighbors{
+				Nx:trainingSet[i].Tx, Ny:trainingSet[i].Ty,
+				FrameName:trainingSet[i].FrameName,
+				Dist:dist,
+			})
+		}
+
+	}
+	for i := 0; i < 3; i++ {
+		Knn = append(Knn, neighbors[i])
+	}
+	return neighbors
 }
