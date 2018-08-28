@@ -120,6 +120,7 @@ func additionalDetection()[][]string {
 			}
 		}
 		output = append(output, []string{
+			time.Now().Format(time.RFC850),
 			v.FrameName,
 			face.Gender,
 			u.AgeGroup(face.Age),
