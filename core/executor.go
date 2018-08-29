@@ -16,17 +16,19 @@ import ("log"
 	"bytes"
 	"strings"
 	"strconv"
+	"github.com/disintegration/imaging"
+	"image/jpeg"
 )
 
 
-func RunAzureModel(im u.Img) (int, int){
+func RunAzureModel(im u.TrackableObject) (int, int){
 
 	input := AzureGraph.Graph.Operation("Placeholder")
 	out := AzureGraph.Graph.Operation("loss")
 
 	output, err := AzureGraph.Session.Run(
 		map[tf.Output]*tf.Tensor{
-			input.Output(0): im.NormalisedImgTensor()[0],
+			input.Output(0): u.NormaliseImg(im.ObjectImage)[0],
 		},
 		[]tf.Output{
 			out.Output(0),
@@ -99,14 +101,16 @@ func additionalDetection()[][]string {
 		var clothing u.Clothing
 		go func(data u.TrackableObject) {
 			log.Printf("Running age-gender detection job %s", data.FrameName)
-			out, _ := vision.AnalyzeImage(data.ImageData, azure.VisualFeatures{Faces:true, Description:true})
+			buf := new(bytes.Buffer)
+			jpeg.Encode(buf, data.ObjectImage, nil)
+			out, _ := vision.AnalyzeImage(buf.Bytes(), azure.VisualFeatures{Faces:true, Description:true})
 			azCloudVisionOut <- out
 		}(v)
-		go func(img u.Img) {
-			log.Printf("Running clothing classification job %s", img.ImgName)
-			iC, wC := RunAzureModel(img)
+		go func(imObj u.TrackableObject) {
+			log.Printf("Running clothing classification job %s", imObj.FrameName)
+			iC, wC := RunAzureModel(imObj)
 			azCustomVisionOut <- []int{iC, wC}
-		}(im)
+		}(v)
 		for i := 0; i < 2; i++ {
 			select {
 			case msg1 := <-azCloudVisionOut:
@@ -165,9 +169,13 @@ func runTfSession(frameId int, frameName string) {
 		y2 := float32(img.Bounds().Max.Y) * boxes[curObj][2]
 		centroidX, centroidY := u.CalculateCentroid(x1, y1, x2, y2)
 		boundingBox = append(boundingBox, []float32{x1, y1, x2 ,y2, centroidX, centroidY})
-		updateTracker(frameName, boundingBox, im.ImageBytes)
+
+		objectImage := imaging.Crop(im.ImgObject, image.Rectangle{image.Point{int(x1), int(y1)},
+		image.Point{int(x2), int(y2)}})
+
+		updateTracker(frameName, boundingBox, im.ImageBytes, objectImage)
 		if len(Trackers) == 0 {
-			updateTracker(frameName, boundingBox, im.ImageBytes)
+			updateTracker(frameName, boundingBox, im.ImageBytes, objectImage)
 		} else {
 			for i, _ := range PreviousBox {
 				for j, _ := range boundingBox {
@@ -175,7 +183,7 @@ func runTfSession(frameId int, frameName string) {
 						PreviousBox[i][4], boundingBox[j][4],
 						PreviousBox[i][5], boundingBox[j][5])
 					if math.Round(float64(distFromPrev)) > float64(50) {
-						updateTracker(frameName, boundingBox, im.ImageBytes)
+						updateTracker(frameName, boundingBox, im.ImageBytes, objectImage)
 					}
 				}
 			}
@@ -186,13 +194,14 @@ func runTfSession(frameId int, frameName string) {
 	}
 }
 
-func updateTracker(fnm string, bbox [][]float32, img []byte) {
+func updateTracker(fnm string, bbox [][]float32, img []byte, objImg image.Image) {
 	Trackers = append(Trackers, u.TrackableObject{
 		ObjectId: u.GenUuid(),
 		FrameName: fnm,
 		Counted: true,
 		Centroids: bbox,
 		ImageData: img,
+		ObjectImage: objImg,
 	})
 }
 

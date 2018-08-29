@@ -6,7 +6,10 @@ import (
 	_ "image/png"
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"log"
-	)
+	"image"
+	"bytes"
+	"image/jpeg"
+)
 
 func decodeJpegGraph() (graph *tf.Graph, input, output tf.Output, err error) {
 	s := op.NewScope()
@@ -91,6 +94,36 @@ func ConstructGraphToNormaliseImage() (graph *tf.Graph, input, output tf.Output,
 func (i *Img) NormalisedImgTensor()[]*tf.Tensor {
 	// DecodeJpeg uses a scalar String-valued tensor as input.
 	tensor, err := tf.NewTensor(string(i.ImageBytes))
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Creates a tensorflow graph to decode the png Img
+	graph, input, output, err := ConstructGraphToNormaliseImage()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Execute that graph to decode this one Img
+	session, err := tf.NewSession(graph, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer session.Close()
+	normalized, err := session.Run(
+		map[tf.Output]*tf.Tensor{input: tensor},
+		[]tf.Output{output},
+		nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return normalized
+}
+
+
+func NormaliseImg(im image.Image)[]*tf.Tensor {
+	// DecodeJpeg uses a scalar String-valued tensor as input.
+	buf := new(bytes.Buffer)
+	jpeg.Encode(buf, im, nil)
+	tensor, err := tf.NewTensor(string(buf.Bytes()))
 	if err != nil {
 		log.Fatal(err)
 	}

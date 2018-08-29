@@ -34,6 +34,7 @@ type TrackableObject struct {
 	Centroids [][]float32
 	DistanceFromPrevious float32
 	ImageData []byte
+	ObjectImage image.Image
 }
 
 type Train struct {
